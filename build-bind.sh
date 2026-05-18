@@ -1,11 +1,12 @@
 #!/bin/bash
 set -e
 
-# Usage: ./build-bind.sh <version> [arch]
-# Example: ./build-bind.sh 9.18.48 x86_64
+# Usage: ./build-bind.sh <version> [openssl-ver] [arch]
+# Example: ./build-bind.sh 9.18.48 3.0.15 x86_64
 
-BIND_VERSION="${1:?Usage: $0 <version> [arch]}"
-ARCH="${2:-$(uname -m)}"
+BIND_VERSION="${1:?Usage: $0 <version> [openssl-ver] [arch]}"
+OS_VER="${2:-1.1.1w}"
+ARCH="${3:-$(uname -m)}"
 PREFIX=/usr/local/bind
 
 CACHE_DIR="${CACHE_DIR:-$(pwd)/cache}"
@@ -34,8 +35,9 @@ done
 # Install build dependencies
 yum install -y epel-release
 
+yum groupinstall -y "Development Tools"
 yum install -y \
-  curl gcc gcc-c++ make pkgconfig perl \
+  curl pkgconfig perl-core perl-devel zlib-devel \
   libuv-devel libcap-devel \
   xz autoconf automake libtool
 
@@ -44,12 +46,15 @@ yum install -y \
   libevent-devel \
   || true
 
-# Build OpenSSL 1.1.1w (system 1.0.2 lacks Ed25519/Ed448 and modern APIs)
-OS_VER=1.1.1w
-download "https://www.openssl.org/source/openssl-${OS_VER}.tar.gz"
+# Build OpenSSL (system 1.0.2 lacks Ed25519/Ed448 and modern APIs)
+# OpenSSL 1.1.x uses www.openssl.org; 3.x uses GitHub releases
+OPENSSL_URL="https://www.openssl.org/source/openssl-${OS_VER}.tar.gz"
+[ "${OS_VER%%.*}" = "3" ] && \
+  OPENSSL_URL="https://github.com/openssl/openssl/releases/download/openssl-${OS_VER}/openssl-${OS_VER}.tar.gz"
+download "$OPENSSL_URL"
 tar xzf "openssl-${OS_VER}.tar.gz"
 cd "openssl-${OS_VER}"
-./config --prefix="$PREFIX" --openssldir="$PREFIX/ssl"
+./config --prefix="$PREFIX" --openssldir="$PREFIX/ssl" --libdir="$PREFIX/lib"
 make -j$(nproc)
 make install_sw
 cd ..
@@ -92,7 +97,7 @@ download "https://downloads.isc.org/isc/bind9/${BIND_VERSION}/bind-${BIND_VERSIO
 tar xJf "bind-${BIND_VERSION}.tar.xz"
 cd "bind-${BIND_VERSION}"
 
-LDFLAGS="-Wl,-rpath,$PREFIX/lib" \
+LDFLAGS="-L$PREFIX/lib -Wl,-rpath,$PREFIX/lib" \
 ./configure \
   --prefix="$PREFIX" \
   --sysconfdir=/etc/bind \
@@ -109,7 +114,7 @@ make install DESTDIR="$(pwd)/install"
 
 find "$(pwd)/install" -type f -executable -exec strip --strip-all {} \; 2>/dev/null || true
 
-DIST="bind-${BIND_VERSION}-linux-glibc2.17-${ARCH}"
+DIST="bind-${BIND_VERSION}-linux-glibc2.17-${ARCH}-openssl-${OS_VER}"
 cd install
 tar -cJf "../${DIST}.tar.xz" usr/local/bind etc/bind
 cd ..
