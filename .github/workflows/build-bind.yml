@@ -122,7 +122,7 @@ jobs:
 
               # Build libfstrm
               FS_VER=0.6.1
-              curl -fsSL "https://github.com/farsightsec/fstrm/releases/download/v${FS_VER}/fstrm-${FS_VER}.tar.gz" | tar xzf -
+              curl -fsSL "https://dl.farsightsecurity.com/dist/fstrm/fstrm-${FS_VER}.tar.gz" | tar xzf -
               cd "fstrm-${FS_VER}"
               ./configure --prefix="$PREFIX" --disable-shared
               make -j$(nproc)
