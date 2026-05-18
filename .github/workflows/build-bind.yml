@@ -87,12 +87,17 @@ jobs:
               for dts in /opt/rh/devtoolset-*/enable; do
                 [ -f "$dts" ] && source "$dts" && break
               done
+              GCC_VER=$(gcc -dumpversion | cut -d. -f1)
+              if [ "$GCC_VER" -lt 5 ]; then
+                echo "ERROR: GCC >= 5 required, found GCC ${GCC_VER}"
+                exit 1
+              fi
 
               yum install -y epel-release
 
               yum install -y \
                 curl gcc gcc-c++ make pkgconfig perl \
-                openssl-devel libuv-devel libcap-devel \
+                libuv-devel libcap-devel \
                 xz autoconf automake libtool
 
               yum install -y \
@@ -102,11 +107,23 @@ jobs:
 
               PREFIX=/usr/local/bind
 
+              # Build OpenSSL 1.1.1w (system 1.0.2 lacks Ed25519/Ed448 and modern APIs)
+              OS_VER=1.1.1w
+              curl -fsSL "https://www.openssl.org/source/openssl-${OS_VER}.tar.gz" | tar xzf -
+              cd "openssl-${OS_VER}"
+              ./config --prefix="$PREFIX" --openssldir="$PREFIX/ssl"
+              make -j$(nproc)
+              make install_sw
+              cd ..
+
+              export PATH="$PREFIX/bin:$PATH"
+              export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig:$PKG_CONFIG_PATH"
+
               # Build protobuf from source (EPEL only has 2.5, protobuf-c needs >= 2.6.1)
               PB_VER=3.20.3
               curl -fsSL "https://github.com/protocolbuffers/protobuf/releases/download/v${PB_VER}/protobuf-cpp-${PB_VER}.tar.gz" | tar xzf -
               cd "protobuf-${PB_VER}"
-              ./configure --prefix="$PREFIX" --disable-shared
+              ./configure --prefix="$PREFIX" --disable-shared --with-pic
               make -j$(nproc)
               make install
               cd ..
@@ -115,9 +132,7 @@ jobs:
               PBC_VER=1.4.1
               curl -fsSL "https://github.com/protobuf-c/protobuf-c/releases/download/v${PBC_VER}/protobuf-c-${PBC_VER}.tar.gz" | tar xzf -
               cd "protobuf-c-${PBC_VER}"
-              export PATH="$PREFIX/bin:$PATH"
-              export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig:$PKG_CONFIG_PATH"
-              ./configure --prefix="$PREFIX" --disable-shared
+              ./configure --prefix="$PREFIX" --disable-shared --with-pic
               make -j$(nproc)
               make install
               cd ..
@@ -126,7 +141,7 @@ jobs:
               FS_VER=0.6.1
               curl -fsSL "https://dl.farsightsecurity.com/dist/fstrm/fstrm-${FS_VER}.tar.gz" | tar xzf -
               cd "fstrm-${FS_VER}"
-              ./configure --prefix="$PREFIX" --disable-shared
+              ./configure --prefix="$PREFIX" --disable-shared --with-pic
               make -j$(nproc)
               make install
               cd ..
@@ -138,14 +153,12 @@ jobs:
               tar xJf "bind-${BIND_VERSION}.tar.xz"
               cd "bind-${BIND_VERSION}"
 
-              export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig:$PKG_CONFIG_PATH"
-              export PATH="$PREFIX/bin:$PATH"
-              CFLAGS="-Wno-error=implicit-function-declaration" \
+              LDFLAGS="-Wl,-rpath,$PREFIX/lib" \
               ./configure \
                 --prefix="$PREFIX" \
                 --sysconfdir=/etc/bind \
                 --localstatedir=/var \
-                --with-openssl \
+                --with-openssl="$PREFIX" \
                 --with-json-c \
                 --with-libxml2 \
                 --with-jemalloc \
