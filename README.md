@@ -22,6 +22,7 @@
 | glibc | 2.17 |
 | OpenSSL | 1.0.2k |
 | libuv | EPEL |
+| protobuf / protobuf-c / fstrm | 源码编译（dnstap 支持） |
 
 ## 产物
 

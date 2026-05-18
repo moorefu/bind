@@ -91,24 +91,55 @@ jobs:
               yum install -y epel-release
 
               yum install -y \
-                gcc gcc-c++ make pkgconfig perl \
+                curl gcc gcc-c++ make pkgconfig perl \
                 openssl-devel libuv-devel libcap-devel \
-                xz
+                xz autoconf automake libtool
 
               yum install -y \
                 jemalloc-devel json-c-devel libxml2-devel \
-                libfstrm-devel protobuf-c-devel \
                 || true
 
+              PREFIX=/usr/local/bind
+
+              # Build protobuf from source (EPEL only has 2.5, protobuf-c needs >= 2.6.1)
+              PB_VER=3.20.3
+              curl -fsSL "https://github.com/protocolbuffers/protobuf/releases/download/v${PB_VER}/protobuf-cpp-${PB_VER}.tar.gz" | tar xzf -
+              cd "protobuf-${PB_VER}"
+              ./configure --prefix="$PREFIX" --disable-shared
+              make -j$(nproc)
+              make install
+              cd ..
+
+              # Build protobuf-c
+              PBC_VER=1.4.1
+              curl -fsSL "https://github.com/protobuf-c/protobuf-c/releases/download/v${PBC_VER}/protobuf-c-${PBC_VER}.tar.gz" | tar xzf -
+              cd "protobuf-c-${PBC_VER}"
+              export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig:$PKG_CONFIG_PATH"
+              ./configure --prefix="$PREFIX" --disable-shared
+              make -j$(nproc)
+              make install
+              cd ..
+
+              # Build libfstrm
+              FS_VER=0.6.1
+              curl -fsSL "https://github.com/farsightsec/fstrm/releases/download/v${FS_VER}/fstrm-${FS_VER}.tar.gz" | tar xzf -
+              cd "fstrm-${FS_VER}"
+              ./configure --prefix="$PREFIX" --disable-shared
+              make -j$(nproc)
+              make install
+              cd ..
+
+              # Download BIND
               MAJOR_MINOR="${BIND_VERSION%.*}"
               URL="https://downloads.isc.org/isc/bind9/${MAJOR_MINOR}/bind-${BIND_VERSION}.tar.xz"
               echo "Downloading $URL"
-              curl -sSL "$URL" -o "bind-${BIND_VERSION}.tar.xz"
-              tar xf "bind-${BIND_VERSION}.tar.xz"
+              curl -fsSL "$URL" -o "bind-${BIND_VERSION}.tar.xz"
+              tar xJf "bind-${BIND_VERSION}.tar.xz"
               cd "bind-${BIND_VERSION}"
 
+              export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig:$PKG_CONFIG_PATH"
               ./configure \
-                --prefix=/usr/local/bind \
+                --prefix="$PREFIX" \
                 --sysconfdir=/etc/bind \
                 --localstatedir=/var \
                 --with-openssl \
