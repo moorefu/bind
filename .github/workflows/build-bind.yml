@@ -1,0 +1,161 @@
+name: Build BIND
+
+on:
+  workflow_call:
+    inputs:
+      release_version:
+        required: true
+        type: string
+      make_latest:
+        required: false
+        type: boolean
+        default: false
+      prerelease:
+        required: false
+        type: boolean
+        default: false
+    outputs:
+      release_version:
+        description: "The version of BIND being built"
+        value: ${{ jobs.prepare.outputs.release_version }}
+
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: 'Version to build (e.g. 9.18.48)'
+        required: true
+        type: string
+      make_latest:
+        description: 'Mark as latest release'
+        required: false
+        type: boolean
+        default: false
+      prerelease:
+        description: 'Mark as prerelease'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      release_version: ${{ steps.setup.outputs.version }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup environment
+        id: setup
+        run: |
+          VERSION="${{ inputs.release_version }}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+  build-linux:
+    needs: prepare
+    strategy:
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest
+            image: quay.io/pypa/manylinux2014_x86_64
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+            image: quay.io/pypa/manylinux2014_aarch64
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build in manylinux container
+        env:
+          BIND_VERSION: ${{ needs.prepare.outputs.release_version }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          docker run --rm \
+            -e BIND_VERSION \
+            -e ARCH \
+            -v "$(pwd)":/workspace \
+            -w /workspace \
+            ${{ matrix.image }} \
+            sh -c '
+              set -e
+
+              for dts in /opt/rh/devtoolset-*/enable; do
+                [ -f "$dts" ] && source "$dts" && break
+              done
+
+              yum install -y epel-release
+
+              yum install -y \
+                gcc gcc-c++ make pkgconfig perl \
+                openssl-devel libuv-devel libcap-devel \
+                xz
+
+              yum install -y \
+                jemalloc-devel json-c-devel libxml2-devel \
+                libfstrm-devel protobuf-c-devel \
+                || true
+
+              MAJOR_MINOR="${BIND_VERSION%.*}"
+              URL="https://downloads.isc.org/isc/bind9/${MAJOR_MINOR}/bind-${BIND_VERSION}.tar.xz"
+              echo "Downloading $URL"
+              curl -sSL "$URL" -o "bind-${BIND_VERSION}.tar.xz"
+              tar xf "bind-${BIND_VERSION}.tar.xz"
+              cd "bind-${BIND_VERSION}"
+
+              ./configure \
+                --prefix=/usr/local/bind \
+                --sysconfdir=/etc/bind \
+                --localstatedir=/var \
+                --with-openssl \
+                --with-libuv \
+                --with-libcap \
+                --with-json-c \
+                --with-libxml2 \
+                --with-jemalloc \
+                --enable-dnstap \
+                --disable-doh
+
+              make -j$(nproc)
+              make install DESTDIR=/workspace/install
+
+              find /workspace/install -type f -executable -exec strip --strip-all {} \; 2>/dev/null || true
+
+              DIST="bind-${BIND_VERSION}-linux-glibc2.17-${ARCH}"
+              cd /workspace/install
+              tar -cJf "/workspace/${DIST}.tar.xz" usr/local/bind etc/bind var
+              sha256sum "/workspace/${DIST}.tar.xz" > "/workspace/${DIST}.tar.xz.sha256"
+            '
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bind-linux-${{ matrix.arch }}
+          path: |
+            bind-*-linux-glibc2.17-${{ matrix.arch }}.tar.xz
+            bind-*-linux-glibc2.17-${{ matrix.arch }}.tar.xz.sha256
+
+  release:
+    needs: [prepare, build-linux]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Set version
+        run: echo "VERSION=${{ needs.prepare.outputs.release_version }}" >> $GITHUB_ENV
+
+      - uses: actions/download-artifact@v4
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          name: BIND ${{ env.VERSION }}
+          tag_name: ${{ env.VERSION }}
+          make_latest: "${{ inputs.make_latest }}"
+          prerelease: ${{ inputs.prerelease }}
+          files: |
+            bind-linux-x86_64/bind-${{ env.VERSION }}-linux-glibc2.17-x86_64.tar.xz
+            bind-linux-x86_64/bind-${{ env.VERSION }}-linux-glibc2.17-x86_64.tar.xz.sha256
+            bind-linux-aarch64/bind-${{ env.VERSION }}-linux-glibc2.17-aarch64.tar.xz
+            bind-linux-aarch64/bind-${{ env.VERSION }}-linux-glibc2.17-aarch64.tar.xz.sha256
