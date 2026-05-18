@@ -97,6 +97,7 @@ jobs:
 
               yum install -y \
                 jemalloc-devel json-c-devel libxml2-devel \
+                libevent-devel \
                 || true
 
               PREFIX=/usr/local/bind
