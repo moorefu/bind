@@ -197,8 +197,8 @@ jobs:
         with:
           name: bind-linux-${{ matrix.arch }}
           path: |
-            bind-*-linux-glibc2.17-${{ matrix.arch }}.tar.xz
-            bind-*-linux-glibc2.17-${{ matrix.arch }}.tar.xz.sha256
+            bind-*-linux-glibc2.17-${{ matrix.arch }}-openssl-*.tar.xz
+            bind-*-linux-glibc2.17-${{ matrix.arch }}-openssl-*.tar.xz.sha256
 
   release:
     needs: [prepare, build-linux]
