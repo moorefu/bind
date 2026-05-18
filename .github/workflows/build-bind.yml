@@ -172,7 +172,7 @@ jobs:
 
               DIST="bind-${BIND_VERSION}-linux-glibc2.17-${ARCH}"
               cd /workspace/install
-              tar -cJf "/workspace/${DIST}.tar.xz" usr/local/bind etc/bind var
+              tar -cJf "/workspace/${DIST}.tar.xz" usr/local/bind etc/bind
               sha256sum "/workspace/${DIST}.tar.xz" > "/workspace/${DIST}.tar.xz.sha256"
             '
 
