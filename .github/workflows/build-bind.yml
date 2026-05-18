@@ -131,8 +131,7 @@ jobs:
               cd ..
 
               # Download BIND
-              MAJOR_MINOR="${BIND_VERSION%.*}"
-              URL="https://downloads.isc.org/isc/bind9/${MAJOR_MINOR}/bind-${BIND_VERSION}.tar.xz"
+              URL="https://downloads.isc.org/isc/bind9/${BIND_VERSION}/bind-${BIND_VERSION}.tar.xz"
               echo "Downloading $URL"
               curl -fsSL "$URL" -o "bind-${BIND_VERSION}.tar.xz"
               tar xJf "bind-${BIND_VERSION}.tar.xz"
