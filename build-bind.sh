@@ -112,6 +112,10 @@ LDFLAGS="-L$PREFIX/lib -Wl,-rpath,$PREFIX/lib" \
 make -j$(nproc)
 make install DESTDIR="$(pwd)/install"
 
+# Bundle OpenSSL shared libs into the package
+mkdir -p "$(pwd)/install$PREFIX/lib"
+cp -a "$PREFIX/lib"/libssl.so* "$PREFIX/lib"/libcrypto.so* "$(pwd)/install$PREFIX/lib/"
+
 find "$(pwd)/install" -type f -executable -exec strip --strip-all {} \; 2>/dev/null || true
 
 DIST="bind-${BIND_VERSION}-linux-glibc2.17-${ARCH}-openssl-${OS_VER}"

@@ -184,6 +184,10 @@ jobs:
               make -j$(nproc)
               make install DESTDIR=/workspace/install
 
+              # Bundle OpenSSL shared libs into the package
+              mkdir -p /workspace/install$PREFIX/lib
+              cp -a "$PREFIX/lib"/libssl.so* "$PREFIX/lib"/libcrypto.so* /workspace/install$PREFIX/lib/
+
               find /workspace/install -type f -executable -exec strip --strip-all {} \; 2>/dev/null || true
 
               DIST="bind-${BIND_VERSION}-linux-glibc2.17-${ARCH}-openssl-${OS_VER}"
