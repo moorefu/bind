@@ -112,9 +112,12 @@ LDFLAGS="-L$PREFIX/lib -Wl,-rpath,$PREFIX/lib" \
 make -j$(nproc)
 make install DESTDIR="$(pwd)/install"
 
-# Bundle OpenSSL shared libs into the package
+# Bundle non-glibc shared libs into the package
 mkdir -p "$(pwd)/install$PREFIX/lib"
 cp -a "$PREFIX/lib"/libssl.so* "$PREFIX/lib"/libcrypto.so* "$(pwd)/install$PREFIX/lib/"
+cp -a /usr/lib64/libuv.so* /usr/lib64/libjson-c.so* \
+      /usr/lib64/libcap.so* /usr/lib64/libxml2.so* /usr/lib64/libjemalloc.so* \
+      "$(pwd)/install$PREFIX/lib/" 2>/dev/null || true
 
 find "$(pwd)/install" -type f -executable -exec strip --strip-all {} \; 2>/dev/null || true
 
